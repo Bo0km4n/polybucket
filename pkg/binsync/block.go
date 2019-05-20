@@ -21,7 +21,7 @@ func SetBlockSize(s int64) {
 	BlockSize = s
 }
 
-func GenerateBlocks(src io.Reader, dst io.Reader) ([]*Block, error) {
+func GenerateBlocks(src io.Reader, dst io.Reader) ([]*Block, []*Block, error) {
 	buf := make([]byte, BlockSize)
 	srcBlocks := []*Block{}
 	dstBlocks := []*Block{}
@@ -53,6 +53,7 @@ func GenerateBlocks(src io.Reader, dst io.Reader) ([]*Block, error) {
 	srcIdx := 0
 	srcBlock := &Block{}
 	buf = make([]byte, BlockSize)
+
 	for {
 		if len(srcBlocks) <= srcIdx {
 			srcBlock = &Block{}
@@ -62,7 +63,7 @@ func GenerateBlocks(src io.Reader, dst io.Reader) ([]*Block, error) {
 
 		n, err := dst.Read(buf)
 		if err != nil && err != io.EOF {
-			return dstBlocks, err
+			return srcBlocks, dstBlocks, err
 		}
 		if n == 0 {
 			break
@@ -86,5 +87,5 @@ func GenerateBlocks(src io.Reader, dst io.Reader) ([]*Block, error) {
 		dstStart += n
 	}
 
-	return dstBlocks, nil
+	return srcBlocks, dstBlocks, nil
 }

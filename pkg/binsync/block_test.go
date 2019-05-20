@@ -15,12 +15,12 @@ func TestSimpleRead(t *testing.T) {
 	}{
 		{
 			src: bytes.NewReader([]byte{0x00, 0x01}),
-			dst: bytes.NewReader([]byte{0x02, 0x01, 0x20}),
+			dst: bytes.NewReader([]byte{0x02}),
 		},
 	}
 	SetBlockSize(1)
 	for _, c := range cases {
-		blocks, err := GenerateBlocks(c.src, c.dst)
+		_, blocks, err := GenerateBlocks(c.src, c.dst)
 		if err != nil {
 			t.Fatal(err)
 		}

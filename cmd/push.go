@@ -1,6 +1,11 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"log"
+
+	"github.com/Bo0km4n/polybucket/pkg/manager"
+	"github.com/spf13/cobra"
+)
 
 var pushCmd = &cobra.Command{
 	Use:     "push",
@@ -16,5 +21,7 @@ Example: cobra add server -> resulting in a new cmd/server.go`,
 }
 
 func push(cmd *cobra.Command, args []string) {
-
+	if _, err := manager.NewGCSManager("dev-super-resolution", "generation/"); err != nil {
+		log.Fatal(err)
+	}
 }
