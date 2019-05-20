@@ -21,7 +21,7 @@ Example: cobra add server -> resulting in a new cmd/server.go`,
 }
 
 func push(cmd *cobra.Command, args []string) {
-	if _, err := manager.NewGCSManager("dev-super-resolution", "generation/"); err != nil {
+	if _, err := manager.NewGCSManager("dev-super-resolution", "generation/", "README.md"); err != nil {
 		log.Fatal(err)
 	}
 }

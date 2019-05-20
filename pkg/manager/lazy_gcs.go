@@ -11,29 +11,53 @@ import (
 )
 
 const (
-	historyFileName = "polybucket_hisotory.json"
+	historyFileName = "_polybucket/hisotory.json"
 )
 
 type GCS struct {
 	history *history
 	bucket  *storage.BucketHandle
+	prefix  string
+	objects []*storage.ObjectHandle
 }
 
-func NewGCSManager(bucket, prefix string) (*GCS, error) {
+func NewGCSManager(bucket, prefix, modelName string) (*GCS, error) {
+	prefix = strings.TrimRight(prefix, "/") + "/"
 	bkt, err := thirdparty.NewGCSBucket(bucket)
 	if err != nil {
 		return nil, err
 	}
-	historyFileName := strings.TrimRight(prefix, "/") + "/" + historyFileName
+	historyFileName := prefix + "/" + historyFileName
 
 	history, err := fetchHistory(bkt, historyFileName)
 	if err != nil {
 		return nil, err
 	}
+
 	return &GCS{
 		history: history,
 		bucket:  bkt,
+		prefix:  prefix,
 	}, nil
+}
+
+func (gcs *GCS) LazyFetchModel(version string) (*storage.ObjectHandle, error) {
+	// generation, ok := gcs.history.Versions[version]
+	// if !ok {
+	// 	return nil, fmt.Errorf("Not found version: %s", version)
+	// }
+	// objs := gcs.bucket.Objects(context.Background(), &storage.Query{
+	// 	Prefix:    gcs.prefix,
+	// 	Delimiter: "/",
+	// 	Versions:  true,
+	// })
+	// for {
+	// 	obj, err := objs.Next()
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// }
+	return nil, nil
 }
 
 func fetchHistory(bucket *storage.BucketHandle, fileName string) (*history, error) {
@@ -44,7 +68,7 @@ func fetchHistory(bucket *storage.BucketHandle, fileName string) (*history, erro
 		writer := obj.NewWriter(ctx)
 		defer writer.Close()
 		newHistory := &history{
-			Versions: make(map[string]string),
+			Versions: make(map[string]int64),
 		}
 		b, err := json.Marshal(newHistory)
 		if err != nil {
