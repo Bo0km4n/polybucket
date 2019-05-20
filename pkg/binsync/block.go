@@ -1,7 +1,9 @@
 package binsync
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"hash/adler32"
 	"io"
 )
 
@@ -19,17 +21,70 @@ func SetBlockSize(s int64) {
 	BlockSize = s
 }
 
-func GenerateBlocks(reader io.Reader) ([]*Block, error) {
+func GenerateBlocks(src io.Reader, dst io.Reader) ([]*Block, error) {
 	buf := make([]byte, BlockSize)
-	blocks := []*Block{}
+	srcBlocks := []*Block{}
+	dstBlocks := []*Block{}
+	srcStart := 0
+	dstStart := 0
+
+	// Make source object's list of signature
 	for {
-		n, err := reader.Read(buf)
+		n, err := src.Read(buf)
 		if err != nil && err != io.EOF {
-			return blocks, err
+			break
 		}
 		if n == 0 {
 			break
 		}
+		b := &Block{
+			Start:      int64(srcStart),
+			End:        int64(srcStart + n),
+			Signature:  sha256.Sum256(buf[:n]),
+			Checksum32: adler32.Checksum(buf[:n]),
+			HasData:    false,
+		}
+		srcBlocks = append(srcBlocks, b)
+		srcStart += n
 	}
-	return blocks, nil
+
+	// Make blocks then compare the signature, if different from source's signature
+	// build block inserted different byte array.
+	srcIdx := 0
+	srcBlock := &Block{}
+	buf = make([]byte, BlockSize)
+	for {
+		if len(srcBlocks) <= srcIdx {
+			srcBlock = &Block{}
+		} else {
+			srcBlock = srcBlocks[srcIdx]
+		}
+
+		n, err := dst.Read(buf)
+		if err != nil && err != io.EOF {
+			return dstBlocks, err
+		}
+		if n == 0 {
+			break
+		}
+		dstBlock := &Block{
+			Start:      int64(dstStart),
+			End:        int64(dstStart + n),
+			Checksum32: adler32.Checksum(buf[:n]),
+			Signature:  sha256.Sum256(buf[:n]),
+		}
+		if !bytes.Equal(dstBlock.Signature[:], srcBlock.Signature[:]) {
+			dstBlock.HasData = true
+			dstBlock.RawBytes = make([]byte, n)
+			copy(dstBlock.RawBytes, buf[:n])
+		} else {
+			dstBlock.HasData = false
+		}
+
+		dstBlocks = append(dstBlocks, dstBlock)
+		srcIdx += 1
+		dstStart += n
+	}
+
+	return dstBlocks, nil
 }
