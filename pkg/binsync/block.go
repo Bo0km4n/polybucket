@@ -7,12 +7,27 @@ import (
 	"io"
 )
 
+type Content struct {
+	IsNone bool
+	Raw    []byte
+}
+
 type Block struct {
 	Start, End int64
 	Checksum32 uint32
 	Signature  [sha256.Size]byte
 	HasData    bool
-	RawBytes   []byte
+	Content    *Content
+}
+
+type Object struct {
+	Blocks []*Block
+}
+
+type enumerator struct {
+	idx      int
+	src, dst []*Block
+	a, b     *Block
 }
 
 var BlockSize = int64(1024)
@@ -25,67 +40,106 @@ func GenerateBlocks(src io.Reader, dst io.Reader) ([]*Block, []*Block, error) {
 	buf := make([]byte, BlockSize)
 	srcBlocks := []*Block{}
 	dstBlocks := []*Block{}
-	srcStart := 0
-	dstStart := 0
+	index := 0
 
-	// Make source object's list of signature
+	// Build source blocks
 	for {
 		n, err := src.Read(buf)
-		if err != nil && err != io.EOF {
+		if err == io.EOF {
 			break
-		}
-		if n == 0 {
-			break
-		}
-		b := &Block{
-			Start:      int64(srcStart),
-			End:        int64(srcStart + n),
-			Signature:  sha256.Sum256(buf[:n]),
-			Checksum32: adler32.Checksum(buf[:n]),
-			HasData:    false,
-		}
-		srcBlocks = append(srcBlocks, b)
-		srcStart += n
-	}
-
-	// Make blocks then compare the signature, if different from source's signature
-	// build block inserted different byte array.
-	srcIdx := 0
-	srcBlock := &Block{}
-	buf = make([]byte, BlockSize)
-
-	for {
-		if len(srcBlocks) <= srcIdx {
-			srcBlock = &Block{}
-		} else {
-			srcBlock = srcBlocks[srcIdx]
-		}
-
-		n, err := dst.Read(buf)
-		if err != nil && err != io.EOF {
+		} else if err != nil {
 			return srcBlocks, dstBlocks, err
 		}
-		if n == 0 {
-			break
-		}
-		dstBlock := &Block{
-			Start:      int64(dstStart),
-			End:        int64(dstStart + n),
-			Checksum32: adler32.Checksum(buf[:n]),
-			Signature:  sha256.Sum256(buf[:n]),
-		}
-		if !bytes.Equal(dstBlock.Signature[:], srcBlock.Signature[:]) {
-			dstBlock.HasData = true
-			dstBlock.RawBytes = make([]byte, n)
-			copy(dstBlock.RawBytes, buf[:n])
-		} else {
-			dstBlock.HasData = false
-		}
 
-		dstBlocks = append(dstBlocks, dstBlock)
-		srcIdx += 1
-		dstStart += n
+		sb := genBlock(index, n, buf[:n])
+		sb.HasData = false
+		srcBlocks = append(srcBlocks, sb)
+		index += n
+	}
+	srcObject := &Object{
+		Blocks: srcBlocks,
 	}
 
+	// Build destination blocks
+	index = 0
+	blockIndex := 0
+	for {
+		n, err := dst.Read(buf)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return srcBlocks, dstBlocks, err
+		}
+
+		db := genBlock(index, n, buf[:n])
+		sb := srcObject.GetBlock(int64(blockIndex))
+		if sb == nil || !bytes.Equal(sb.Signature[:], db.Signature[:]) {
+			db.Content = &Content{
+				IsNone: false,
+				Raw:    make([]byte, BlockSize),
+			}
+			copy(db.Content.Raw, buf[:n])
+		}
+		dstBlocks = append(dstBlocks, db)
+		index += n
+		blockIndex += 1
+	}
+	// enumerate := &enumerator{
+	// 	idx: 0,
+	// 	src: srcBlocks,
+	// 	dst: dstBlocks,
+	// }
+	// for enumerate.Next() {
+	// 	s, d := enumerate.Get()
+	// 	pp.Println(s, d)
+	// }
+
 	return srcBlocks, dstBlocks, nil
+}
+
+func getBlockContentLength(blocks []*Block) int {
+	length := 0
+	for _, b := range blocks {
+		length += int(b.End - b.Start)
+	}
+	return length
+}
+
+func genBlock(start, offset int, data []byte) *Block {
+	return &Block{
+		Start:      int64(start),
+		End:        int64(start + offset),
+		Checksum32: adler32.Checksum(data[:offset]),
+		Signature:  sha256.Sum256(data[:offset]),
+	}
+}
+
+func (e *enumerator) Next() bool {
+	if len(e.src) > e.idx {
+		e.a = e.src[e.idx]
+	} else {
+		e.a = nil
+	}
+	if len(e.dst) > e.idx {
+		e.b = e.dst[e.idx]
+	} else {
+		e.b = nil
+	}
+
+	e.idx += 1
+	if e.a == nil && e.b == nil {
+		return false
+	}
+	return true
+}
+
+func (e *enumerator) Get() (*Block, *Block) {
+	return e.a, e.b
+}
+
+func (o *Object) GetBlock(index int64) *Block {
+	if int64(len(o.Blocks)) <= index {
+		return nil
+	}
+	return o.Blocks[index]
 }
