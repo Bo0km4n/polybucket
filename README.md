@@ -11,4 +11,20 @@ I don't wanna it. I think that model's version controlling should be independent
 So I developed this project.
 Polybucket has backend S3 or GCS. You can select each cloud service or local file system.
 
-## Data structure
+## Management Different
+Polybucket managements model's different on Storage.
+Management alogorithm is based on rsync.
+It is not difficult.
+
+I show the example on below.
+
+![polybucket_repository_statement](https://user-images.githubusercontent.com/15085723/58231781-c10b5580-7d72-11e9-857f-bbb3c1a1c481.png)
+
+This image indicates repository statement between each commit.
+On first commit, you pushed a model file.
+Then, you modify the model's parameter and push it.
+
+On that time, Polybucket calculate diff between first model's file and second it.
+A latest model file will be pushed completely, but first model's file transformed diff compared to the first.
+
+If you restore the model file of first version, polybucket load a latest file and apply diff of first model.
