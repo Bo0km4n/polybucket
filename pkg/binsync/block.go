@@ -21,7 +21,8 @@ type Block struct {
 }
 
 type Object struct {
-	Blocks []*Block
+	BlockSize int64
+	Blocks    []*Block
 }
 
 type enumerator struct {
@@ -30,14 +31,14 @@ type enumerator struct {
 	a, b     *Block
 }
 
-var BlockSize = int64(1024)
+var blockSize = int64(1024)
 
-func SetBlockSize(s int64) {
-	BlockSize = s
+func setBlockSize(s int64) {
+	blockSize = s
 }
 
 func GenerateBlocks(src io.Reader, dst io.Reader) ([]*Block, []*Block, error) {
-	buf := make([]byte, BlockSize)
+	buf := make([]byte, blockSize)
 	srcBlocks := []*Block{}
 	dstBlocks := []*Block{}
 	index := 0
@@ -74,9 +75,10 @@ func GenerateBlocks(src io.Reader, dst io.Reader) ([]*Block, []*Block, error) {
 		db := genBlock(index, n, buf[:n])
 		sb := srcObject.GetBlock(int64(blockIndex))
 		if sb == nil || !bytes.Equal(sb.Signature[:], db.Signature[:]) {
+			db.HasData = true
 			db.Content = &Content{
 				IsNone: false,
-				Raw:    make([]byte, BlockSize),
+				Raw:    make([]byte, blockSize),
 			}
 			copy(db.Content.Raw, buf[:n])
 		}
@@ -142,4 +144,25 @@ func (o *Object) GetBlock(index int64) *Block {
 		return nil
 	}
 	return o.Blocks[index]
+}
+
+func (o *Object) Merge(in *bytes.Reader, out *bytes.Buffer) error {
+	for i := range o.Blocks {
+		block := o.Blocks[i]
+		if block.HasData {
+			if _, err := out.Write(block.Content.Raw); err != nil {
+				return err
+			}
+		} else {
+			secReader := io.NewSectionReader(in, block.Start, block.End-block.Start)
+			chunk := make([]byte, int(block.End-block.Start))
+			if _, err := secReader.ReadAt(chunk, 0); err != nil {
+				return err
+			}
+			if _, err := out.Write(chunk); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
