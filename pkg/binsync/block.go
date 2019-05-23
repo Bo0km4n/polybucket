@@ -20,11 +20,6 @@ type Block struct {
 	Content    *Content
 }
 
-type Object struct {
-	BlockSize int64
-	Blocks    []*Block
-}
-
 type enumerator struct {
 	idx      int
 	src, dst []*Block
@@ -86,15 +81,6 @@ func GenerateBlocks(src io.Reader, dst io.Reader) ([]*Block, []*Block, error) {
 		index += n
 		blockIndex += 1
 	}
-	// enumerate := &enumerator{
-	// 	idx: 0,
-	// 	src: srcBlocks,
-	// 	dst: dstBlocks,
-	// }
-	// for enumerate.Next() {
-	// 	s, d := enumerate.Get()
-	// 	pp.Println(s, d)
-	// }
 
 	return srcBlocks, dstBlocks, nil
 }
@@ -137,32 +123,4 @@ func (e *enumerator) Next() bool {
 
 func (e *enumerator) Get() (*Block, *Block) {
 	return e.a, e.b
-}
-
-func (o *Object) GetBlock(index int64) *Block {
-	if int64(len(o.Blocks)) <= index {
-		return nil
-	}
-	return o.Blocks[index]
-}
-
-func (o *Object) Merge(in *bytes.Reader, out *bytes.Buffer) error {
-	for i := range o.Blocks {
-		block := o.Blocks[i]
-		if block.HasData {
-			if _, err := out.Write(block.Content.Raw); err != nil {
-				return err
-			}
-		} else {
-			secReader := io.NewSectionReader(in, block.Start, block.End-block.Start)
-			chunk := make([]byte, int(block.End-block.Start))
-			if _, err := secReader.ReadAt(chunk, 0); err != nil {
-				return err
-			}
-			if _, err := out.Write(chunk); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }

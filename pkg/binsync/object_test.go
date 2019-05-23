@@ -7,7 +7,7 @@ import (
 	"github.com/k0kubun/pp"
 )
 
-func TestOnePatch(t *testing.T) {
+func TestOneMerge(t *testing.T) {
 
 	cases := []struct {
 		in       []byte
